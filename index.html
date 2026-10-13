@@ -3,6 +3,314 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GROUND ZERO | MMA</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#080a0e;color:white;font-family:Arial,sans-serif;overflow:hidden}
+canvas{display:block}
+#hud{position:fixed;top:18px;left:3%;right:3%;display:flex;justify-content:space-between;gap:16px;pointer-events:none}
+.panel{width:40%;background:#10151ddd;padding:12px 16px;border-top:3px solid #d8ff3e}
+.panel.right{border-color:#ff405b;text-align:right}
+.name{font-size:14px;font-weight:900;letter-spacing:3px}
+.bar{height:12px;background:#333a45;margin-top:10px}
+.fill{height:100%;width:100%;background:#d8ff3e;transition:width .15s}
+.right .fill{background:#ff405b}
+#clock{font-size:32px;font-weight:900;text-align:center}
+#round{font-size:10px;color:#d8ff3e;text-align:center;letter-spacing:3px}
+#controls{position:fixed;bottom:18px;left:18px;padding:13px 16px;background:#10151ddd;border:1px solid #303946;font-size:12px;line-height:1.9}
+#controls b{color:#d8ff3e;letter-spacing:2px}
+#notice{position:fixed;top:43%;width:100%;text-align:center;font-size:clamp(30px,5vw,58px);font-weight:1000;font-style:italic;text-shadow:0 4px 30px black;pointer-events:none}
+#menu{position:fixed;inset:0;z-index:10;background:#07090deF;display:grid;place-items:center;padding:20px}
+#menu.hidden{display:none}
+.card{width:min(500px,100%);padding:35px;background:#10151c;border:1px solid #303b49;border-top:4px solid #d8ff3e}
+.tag{color:#d8ff3e;font-size:11px;font-weight:bold;letter-spacing:4px}
+h1{font-size:clamp(50px,10vw,80px);letter-spacing:-4px;line-height:.85;margin:24px 0}
+h1 span{color:#d8ff3e}
+p{color:#b4bfcb;line-height:1.6;font-size:14px}
+button{width:100%;padding:16px;border:0;background:#d8ff3e;color:#10140a;font-weight:900;font-size:15px;letter-spacing:2px;cursor:pointer;margin-top:18px}
+button:hover{background:#e8ff8a}
+#help{position:fixed;right:18px;bottom:18px;color:#a6b0bd;font-size:11px;text-align:right;line-height:1.8}
+@media(max-width:600px){#hud{left:2%;right:2%;gap:5px}.panel{padding:8px 6px}.name{font-size:10px;letter-spacing:1px}#clock{font-size:23px}#controls{font-size:10px;bottom:8px;left:8px}#help{display:none}}
+</style>
+</head>
+<body>
+<div id="hud">
+ <div class="panel"><div class="name">PLAYER 01</div><div class="bar"><div id="hpP" class="fill"></div></div></div>
+ <div><div id="clock">03:00</div><div id="round">ROUND 01</div></div>
+ <div class="panel right"><div class="name">CPU RIVAL</div><div class="bar"><div id="hpE" class="fill"></div></div></div>
+</div>
+<div id="notice"></div>
+<div id="controls"><b>FIGHT CONTROLS</b><br>W A S D — Move<br>J — Punch<br>K — Kick<br>L — Guard<br>SPACE — Dash</div>
+<div id="help">GROUND ZERO<br>3D FIGHT SIMULATOR</div>
+<div id="menu"><div class="card">
+ <div class="tag">GROUND ZERO / FIGHT SIMULATOR</div>
+ <h1>OWN THE<br><span>ARENA.</span></h1>
+ <p>Entre dans la cage. Gère ton endurance, esquive les attaques et trouve l'ouverture pour mettre ton rival KO.</p>
+ <p>Ce prototype utilise une arène 3D et des combattants 3D générés dans le navigateur.</p>
+ <button id="play">ENTER THE CAGE →</button>
+</div></div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x080a10);
+scene.fog=new THREE.Fog(0x080a10,18,38);
+
+const camera=new THREE.PerspectiveCamera(38,innerWidth/innerHeight,.1,100);
+camera.position.set(0,7.5,17);
+camera.lookAt(0,1,0);
+
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.2;
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0x9ebaff,0x17111c,2));
+const spotlight=new THREE.DirectionalLight(0xfff1dc,3.2);
+spotlight.position.set(-5,12,7);
+spotlight.castShadow=true;
+scene.add(spotlight);
+const blue=new THREE.PointLight(0x315bff,30,18);
+blue.position.set(6,5,-6);scene.add(blue);
+const pink=new THREE.PointLight(0xff254f,22,15);
+pink.position.set(-7,4,-2);scene.add(pink);
+
+const material=(c,r=.5,m=0)=>new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:m});
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(100,100),material(0x0c1119,.9));
+floor.rotation.x=-Math.PI/2;floor.position.y=-.18;floor.receiveShadow=true;scene.add(floor);
+
+const platform=new THREE.Mesh(new THREE.CylinderGeometry(5.6,5.8,.3,64),material(0x202630,.6,.3));
+platform.position.y=0;platform.receiveShadow=true;scene.add(platform);
+const canvasFloor=new THREE.Mesh(new THREE.CylinderGeometry(5.48,5.48,.05,64),material(0x29323d,.8));
+canvasFloor.position.y=.17;scene.add(canvasFloor);
+
+const circle=new THREE.Mesh(new THREE.RingGeometry(4.65,4.69,96),material(0xd8ff3e,.35,.2));
+circle.rotation.x=-Math.PI/2;circle.position.y=.2;scene.add(circle);
+
+for(let i=0;i<12;i++){
+ const a=i*Math.PI/6,x=Math.cos(a)*5.45,z=Math.sin(a)*5.45;
+ const post=new THREE.Mesh(new THREE.CylinderGeometry(.065,.09,3.1,10),material(0x171e29,.4,.5));
+ post.position.set(x,1.65,z);post.castShadow=true;scene.add(post);
+}
+for(let y=.55;y<=2.7;y+=.7){
+ const rope=new THREE.Mesh(new THREE.TorusGeometry(5.45,.025,6,96),material(0x8c9aab,.35,.4));
+ rope.rotation.x=Math.PI/2;rope.position.y=y;scene.add(rope);
+}
+for(let i=0;i<16;i++){
+ const a=i*Math.PI/8;
+ const lightMesh=new THREE.Mesh(new THREE.BoxGeometry(.12,.025,.35),material(i%2?0x8b9bab:0xd8ff3e));
+ lightMesh.position.set(Math.cos(a)*4.8,.21,Math.sin(a)*4.8);
+ lightMesh.rotation.y=-a;scene.add(lightMesh);
+}
+
+// Combattants 3D assemblés à partir de modèles géométriques
+function createFighter(colors){
+ const root=new THREE.Group();scene.add(root);
+ const torsoMat=material(colors.torso,.42,.08);
+ const skinMat=material(colors.skin,.6);
+ const shortsMat=material(colors.shorts,.55);
+ const gloveMat=material(colors.glove,.35,.15);
+ const parts={arms:[],legs:[]};
+
+ function mesh(geo,mat,parent=root){
+  const o=new THREE.Mesh(geo,mat);o.castShadow=true;o.receiveShadow=true;parent.add(o);return o;
+ }
+ function capsule(radius,length,mat,x,y,z){
+  const o=mesh(new THREE.CapsuleGeometry(radius,length,6,12),mat);
+  o.position.set(x,y,z);return o;
+ }
+ mesh(new THREE.CapsuleGeometry(.34,.57,8,16),torsoMat).position.y=1.38;
+ mesh(new THREE.SphereGeometry(.245,20,16),skinMat).position.set(0,2.13,0);
+ mesh(new THREE.SphereGeometry(.25,20,12,0,Math.PI*2,0,Math.PI/2),material(0x111722)).position.set(0,2.22,0);
+ const shorts=mesh(new THREE.BoxGeometry(.59,.28,.4),shortsMat);
+ shorts.position.set(0,.92,0);
+
+ for(const s of [-1,1]){
+  const upper=capsule(.105,.35,skinMat,s*.4,1.42,0);
+  const fist=mesh(new THREE.SphereGeometry(.14,16,12),gloveMat);
+  fist.position.set(s*.43,1.35,.26);
+  const thigh=capsule(.14,.35,skinMat,s*.2,.62,0);
+  const shin=capsule(.105,.22,skinMat,s*.2,.35,0);
+  const foot=mesh(new THREE.BoxGeometry(.22,.12,.34),gloveMat);
+  foot.position.set(s*.2,.23,.09);
+  parts.arms.push({s,upper,fist});
+  parts.legs.push({s,thigh,shin,foot});
+ }
+ return {root,parts,hp:100,stamina:100,attack:null,cooldown:0,stun:0,guard:false,walk:0};
+}
+const player=createFighter({torso:0x252c37,skin:0xc88e6c,shorts:0xd8ff3e,glove:0x12161e});
+const enemy=createFighter({torso:0x30333b,skin:0x986647,shorts:0xb92740,glove:0xe6e9ef});
+player.root.position.set(-1.65,0,1.0);
+enemy.root.position.set(1.65,0,-1.0);
+
+const keys={};
+let running=false,time=180,aiClock=.5;
+const notice=document.getElementById('notice');
+addEventListener('keydown',e=>{
+ const k=e.key.toLowerCase();keys[k]=true;
+ if([' ','arrowup','arrowdown','arrowleft','arrowright'].includes(k))e.preventDefault();
+ if(k==='j')attack(player,'punch');
+ if(k==='k')attack(player,'kick');
+ if(k==='l')player.guard=true;
+ if(k===' '&&running&&player.stamina>=15){
+  player.stamina-=15;
+  const d=new THREE.Vector3(player.root.position.x-enemy.root.position.x,0,player.root.position.z-enemy.root.position.z).normalize();
+  player.root.position.addScaledVector(d,.9);
+ }
+});
+addEventListener('keyup',e=>{
+ keys[e.key.toLowerCase()]=false;
+ if(e.key.toLowerCase()==='l')player.guard=false;
+});
+
+function attack(f,type){
+ if(!running||f.attack||f.cooldown>0||f.stun>0)return;
+ const cost=type==='kick'?23:12;
+ if(f.stamina<cost)return;
+ f.stamina-=cost;
+ f.attack={type,t:0,hit:false};
+ f.cooldown=type==='kick'?.62:.32;
+ f.guard=false;
+}
+function landHit(att,def,type){
+ const dist=att.root.position.distanceTo(def.root.position);
+ if(dist>(type==='kick'?2.25:1.55))return;
+ if(def.guard&&def.stamina>0){
+  def.stamina=Math.max(0,def.stamina-12);
+  showNotice('BLOCKED',.35);return;
+ }
+ def.hp=Math.max(0,def.hp-(type==='kick'?15:9));
+ def.stun=.22;
+ const d=new THREE.Vector3(def.root.position.x-att.root.position.x,0,def.root.position.z-att.root.position.z).normalize();
+ def.root.position.addScaledVector(d,.24);
+ showNotice(type==='kick'?'HEAVY HIT':'CLEAN HIT',.4);
+}
+let noticeTimer=0;
+function showNotice(t,duration){notice.textContent=t;noticeTimer=duration}
+function updateFighter(f,dt){
+ f.walk+=dt*8;
+ f.cooldown=Math.max(0,f.cooldown-dt);
+ f.stun=Math.max(0,f.stun-dt);
+ if(f.attack){
+  const a=f.attack;a.t+=dt;
+  const impact=a.type==='kick'?.27:.14;
+  if(!a.hit&&a.t>=impact){
+   a.hit=true;landHit(f,f===player?enemy:player,a.type);
+  }
+  if(a.t>=(a.type==='kick'?.52:.32))f.attack=null;
+ }
+ for(const a of f.parts.arms){
+  let hx=a.s*.42,hy=f.guard?1.62:1.34,hz=f.guard?.3:.24;
+  if(f.attack&&f.attack.type==='punch'&&a.s===1){hx=.22;hy=1.48;hz=.68}
+  a.fist.position.set(hx,hy,hz);
+  a.upper.position.set((a.s*.4+hx)/2,(1.42+hy)/2,hz/2);
+ }
+ for(const l of f.parts.legs){
+  if(f.attack&&f.attack.type==='kick'&&l.s===1){
+   l.thigh.position.set(.2,.82,.28);l.shin.position.set(.2,.58,.55);l.foot.position.set(.2,.48,.82);
+  }else{
+   l.thigh.position.set(l.s*.2,.62+Math.abs(Math.sin(f.walk+l.s))*.025,0);
+   l.shin.position.set(l.s*.2,.35,0);
+   l.foot.position.set(l.s*.2,.23,Math.sin(f.walk+l.s)*.05);
+  }
+ }
+}
+function move(f,dt){
+ if(f.stun>0||f.attack)return;
+ let x=0,z=0;
+ if(f===player){
+  x=(keys.d?1:0)-(keys.a?1:0);
+  z=(keys.s?1:0)-(keys.w?1:0);
+ }else{
+  const dx=player.root.position.x-f.root.position.x;
+  const dz=player.root.position.z-f.root.position.z;
+  const d=Math.hypot(dx,dz)||1;
+  aiClock-=dt;
+  if(aiClock<=0){
+   aiClock=.35+Math.random()*.35;
+   if(d<1.9&&Math.random()<.55)attack(f,Math.random()<.68?'punch':'kick');
+   f.guard=d<1.5&&Math.random()<.35;
+  }
+  if(d>1.3){x=dx/d;z=dz/d}
+ }
+ const len=Math.hypot(x,z)||1;
+ const speed=f===player?(f.guard?1.5:3.3):1.8;
+ f.root.position.x+=x/len*speed*dt;
+ f.root.position.z+=z/len*speed*dt;
+ f.root.position.x=THREE.MathUtils.clamp(f.root.position.x,-4.25,4.25);
+ f.root.position.z=THREE.MathUtils.clamp(f.root.position.z,-4.25,4.25);
+}
+function bars(){
+ document.getElementById('hpP').style.width=player.hp+'%';
+ document.getElementById('hpE').style.width=enemy.hp+'%';
+}
+function reset(){
+ player.hp=enemy.hp=100;
+ player.stamina=enemy.stamina=100;
+ player.attack=enemy.attack=null;
+ player.cooldown=enemy.cooldown=0;
+ player.stun=enemy.stun=0;
+ player.guard=enemy.guard=false;
+ player.root.position.set(-1.65,0,1);
+ enemy.root.position.set(1.65,0,-1);
+ time=180;aiClock=.5;running=true;notice.textContent='';
+ document.getElementById('menu').classList.add('hidden');
+ bars();
+}
+function finish(){
+ running=false;
+ const won=player.hp>enemy.hp;
+ document.querySelector('#menu .card h1').innerHTML=won?'YOU<br><span>WIN.</span>':'TRY<br><span>AGAIN.</span>';
+ document.querySelector('#menu .card p').textContent=won?'Victoire ! Tu contrôles la cage.':'Le rival remporte le combat. Retourne au combat.';
+ document.getElementById('play').textContent='REMATCH ↻';
+ document.getElementById('menu').classList.remove('hidden');
+}
+document.getElementById('play').addEventListener('click',reset);
+
+let last=performance.now();
+function animate(now){
+ requestAnimationFrame(animate);
+ const dt=Math.min((now-last)/1000,.04);last=now;
+ if(running){
+  time=Math.max(0,time-dt);
+  player.stamina=Math.min(100,player.stamina+11*dt);
+  enemy.stamina=Math.min(100,enemy.stamina+11*dt);
+  move(player,dt);move(enemy,dt);
+  for(const f of [player,enemy]){
+   const other=f===player?enemy:player;
+   f.root.rotation.y=Math.atan2(other.root.position.x-f.root.position.x,other.root.position.z-f.root.position.z);
+   updateFighter(f,dt);
+  }
+  document.getElementById('clock').textContent=String(Math.floor(time/60)).padStart(2,'0')+':'+String(Math.floor(time%60)).padStart(2,'0');
+  bars();
+  if(noticeTimer>0){noticeTimer-=dt;if(noticeTimer<=0)notice.textContent=''}
+  if(player.hp<=0||enemy.hp<=0||time<=0)finish();
+ }
+ const mid=(player.root.position.x+enemy.root.position.x)/2;
+ camera.position.x=THREE.MathUtils.lerp(camera.position.x,mid*.18,.035);
+ camera.lookAt(mid*.15,1,0);
+ renderer.render(scene,camera);
+}
+requestAnimationFrame(animate);
+addEventListener('resize',()=>{
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+ renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>GROUND ZERO</title>
 <style>
