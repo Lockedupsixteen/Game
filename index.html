@@ -1,3 +1,162 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GROUND ZERO</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#080c12;color:white;font-family:Arial,sans-serif}
+canvas{display:block}
+#hud{position:fixed;top:15px;left:3%;right:3%;display:flex;justify-content:space-between;pointer-events:none}
+.f{width:40%;background:#101720;padding:12px;border-top:3px solid #d8ff3e}
+.e{border-color:#ff405b;text-align:right}
+.bar{height:14px;background:#333;margin-top:8px}
+.fill{height:100%;background:#d8ff3e;width:100%}
+.e .fill{background:#ff405b}
+#timer{font-size:30px;font-weight:bold}
+#controls{position:fixed;bottom:10px;left:10px;background:#101720eF;padding:12px;line-height:1.8}
+#menu{position:fixed;z-index:10;inset:0;background:#080c12;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{max-width:450px;width:100%;padding:30px;background:#101720;border-top:4px solid #d8ff3e}
+h1{font-size:60px;margin:20px 0}
+span{color:#d8ff3e}
+button{width:100%;padding:16px;background:#d8ff3e;border:0;font-weight:bold;font-size:17px;cursor:pointer}
+.hidden{display:none!important}
+#msg{position:fixed;top:42%;width:100%;text-align:center;font-size:40px;font-weight:bold;color:#d8ff3e;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="hud">
+ <div class="f">PLAYER 01<div class="bar"><div id="h1" class="fill"></div></div></div>
+ <div><div id="timer">90</div></div>
+ <div class="f e">THE RIVAL<div class="bar"><div id="h2" class="fill"></div></div></div>
+</div>
+<div id="msg"></div>
+<div id="controls">WASD : bouger<br>J : poing<br>K : pied<br>L : bloquer<br>ESPACE : esquive</div>
+<div id="menu"><div class="card">
+ <small>GROUND ZERO / FIGHT SIMULATOR</small>
+ <h1>OWN THE<br><span>ARENA.</span></h1>
+ <p>Entre dans la cage. Bats ton adversaire et gère ton endurance.</p>
+ <button id="start">COMMENCER LE COMBAT</button>
+ <p id="error"></p>
+</div></div>
+<script>
+const menu=document.getElementById('menu');
+const msg=document.getElementById('msg');
+let running=false,started=false,time=90;
+let p={x:-1.5,z:1,hp:100,st:100,guard:false,cool:0};
+let e={x:1.5,z:-1,hp:100,st:100,guard:false,cool:0};
+const keys={};
+let canvas,ctx;
+function setup(){
+ canvas=document.createElement('canvas');
+ document.body.appendChild(canvas);
+ ctx=canvas.getContext('2d');
+ resize();
+}
+function resize(){if(!canvas)return;canvas.width=innerWidth;canvas.height=innerHeight}
+addEventListener('resize',resize);
+addEventListener('keydown',ev=>{
+ keys[ev.key.toLowerCase()]=true;
+ if(ev.key===' ')ev.preventDefault();
+});
+addEventListener('keyup',ev=>keys[ev.key.toLowerCase()]=false);
+
+function strike(att,def,kick){
+ if(att.cool>0||!running||att.st< (kick?20:10))return;
+ att.cool=kick?.55:.3;att.st-=kick?20:10;
+ const d=Math.hypot(att.x-def.x,att.z-def.z);
+ if(d<(kick?2.2:1.45)){
+  if(!def.guard)def.hp=Math.max(0,def.hp-(kick?16:10));
+  msg.textContent=def.guard?'BLOCK!':kick?'HEAVY HIT!':'HIT!';
+  setTimeout(()=>{if(running)msg.textContent=''},450);
+ }
+}
+function reset(){
+ p={x:-1.5,z:1,hp:100,st:100,guard:false,cool:0};
+ e={x:1.5,z:-1,hp:100,st:100,guard:false,cool:0};
+ time=90;running=true;started=true;
+ menu.classList.add('hidden');
+ msg.textContent='';
+ document.getElementById('timer').textContent='90';
+}
+document.getElementById('start').addEventListener('click',()=>{
+ try{
+  setup();
+  reset();
+ }catch(err){
+  document.getElementById('error').textContent='Erreur : '+err.message;
+ }
+});
+function moveF(f,dx,dz,speed){
+ const d=Math.hypot(dx,dz)||1;
+ f.x=Math.max(-4,Math.min(4,f.x+dx/d*speed));
+ f.z=Math.max(-4,Math.min(4,f.z+dz/d*speed));
+}
+function fighter(x,y,color,guard){
+ ctx.save();ctx.translate(x,y);
+ ctx.fillStyle='#0008';ctx.beginPath();ctx.ellipse(0,5,28,10,0,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle=color;ctx.fillRect(-19,-62,38,38);
+ ctx.fillStyle='#c9906c';ctx.beginPath();ctx.arc(0,-75,15,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle='#171c25';ctx.fillRect(-22,-24,17,35);ctx.fillRect(5,-24,17,35);
+ ctx.strokeStyle=guard?'#fff':'#c9906c';ctx.lineWidth=11;ctx.lineCap='round';
+ ctx.beginPath();ctx.moveTo(-15,-55);ctx.lineTo(guard?-27:-34,-40);ctx.moveTo(15,-55);ctx.lineTo(guard?27:34,-40);ctx.stroke();
+ ctx.fillStyle='#151923';ctx.beginPath();ctx.arc(-34,-39,8,0,Math.PI*2);ctx.arc(34,-39,8,0,Math.PI*2);ctx.fill();
+ ctx.restore();
+}
+function render(){
+ if(!ctx)return;
+ const w=canvas.width,h=canvas.height;
+ ctx.clearRect(0,0,w,h);
+ ctx.fillStyle='#080c12';ctx.fillRect(0,0,w,h);
+ const scale=Math.min(w/900,h/600);
+ const cx=w/2,cy=h*.53;
+ ctx.save();ctx.translate(cx,cy);ctx.scale(scale,scale);
+ ctx.fillStyle='#18212d';ctx.beginPath();ctx.ellipse(0,30,300,160,0,0,Math.PI*2);ctx.fill();
+ ctx.strokeStyle='#d8ff3e';ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(0,30,250,125,0,0,Math.PI*2);ctx.stroke();
+ ctx.strokeStyle='#566274';ctx.lineWidth=5;
+ for(let i=0;i<4;i++){ctx.beginPath();ctx.ellipse(0,-50+i*28,300,160,0,0,Math.PI*2);ctx.stroke()}
+ const px=p.x*65,py=p.z*35,ex=e.x*65,ey=e.z*35;
+ fighter(px,py,'#d8ff3e',p.guard);
+ fighter(ex,ey,'#ff405b',e.guard);
+ ctx.restore();
+}
+let last=performance.now();
+function loop(now){
+ requestAnimationFrame(loop);
+ const dt=Math.min((now-last)/1000,.04);last=now;
+ if(running){
+  time-=dt;p.st=Math.min(100,p.st+12*dt);e.st=Math.min(100,e.st+12*dt);
+  p.cool=Math.max(0,p.cool-dt);e.cool=Math.max(0,e.cool-dt);
+  p.guard=!!keys.l;
+  let dx=(keys.d?1:0)-(keys.a?1:0);
+  let dz=(keys.s?1:0)-(keys.w?1:0);
+  if(dx||dz)moveF(p,dx,dz,3*dt);
+  if(keys.j){strike(p,e,false);keys.j=false}
+  if(keys.k){strike(p,e,true);keys.k=false}
+  if(keys[' ']&&p.st>=15){p.st-=15;moveF(p,p.x-e.x,p.z-e.z,-.8);keys[' ']=false}
+  const ex=p.x-e.x,ez=p.z-e.z,d=Math.hypot(ex,ez)||1;
+  e.guard=d<1.3&&Math.random()<.025;
+  if(d>1.15)moveF(e,ex,ez,1.5*dt);
+  else if(Math.random()<.025)strike(e,p,Math.random()<.3);
+  document.getElementById('h1').style.width=p.hp+'%';
+  document.getElementById('h2').style.width=e.hp+'%';
+  document.getElementById('timer').textContent=Math.ceil(time);
+  if(p.hp<=0||e.hp<=0||time<=0){
+   running=false;
+   msg.textContent=p.hp>e.hp?'VICTOIRE !':'DÉFAITE';
+   menu.classList.remove('hidden');
+   document.querySelector('#menu h1').innerHTML=p.hp>e.hp?'YOU<br><span>WIN.</span>':'TRY<br><span>AGAIN.</span>';
+   document.querySelector('#start').textContent='REJOUER';
+  }
+ }
+ render();
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
 <!DOCTYPE html>
 <html lang="fr">
 <head>
